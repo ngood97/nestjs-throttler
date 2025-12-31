@@ -9,10 +9,8 @@ import { LimitController } from './limit.controller';
   imports: [
     ThrottlerModule.forRoot([
       {
-        limit: 5,
-        ttl: seconds(60),
-        blockDuration: seconds(20),
-        ignoreUserAgents: [/throttler-test/g],
+        limit: 3,
+        ttl: seconds(1),
       },
     ]),
   ],

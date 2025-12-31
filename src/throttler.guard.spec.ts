@@ -161,6 +161,7 @@ describe('ThrottlerGuard', () => {
   });
   describe('HTTP Context', () => {
     let reqMock;
+    let reqMock2;
     let resMock;
     let headerSettingMock: jest.Mock;
 
@@ -170,6 +171,11 @@ describe('ThrottlerGuard', () => {
         header: headerSettingMock,
       };
       reqMock = {
+        ip: '127.0.0.1',
+        headers: {},
+      };
+      reqMock2 = {
+        ip: '127.0.0.2',
         headers: {},
       };
     });
@@ -186,7 +192,7 @@ describe('ThrottlerGuard', () => {
       });
       const canActivate = await guard.canActivate(ctxMock);
       expect(canActivate).toBe(true);
-      expect(headerSettingMock).toBeCalledTimes(3);
+      expect(headerSettingMock).toHaveBeenCalledTimes(3);
       expect(headerSettingMock).toHaveBeenNthCalledWith(1, 'X-RateLimit-Limit', 5);
       expect(headerSettingMock).toHaveBeenNthCalledWith(2, 'X-RateLimit-Remaining', 4);
       expect(headerSettingMock).toHaveBeenNthCalledWith(3, 'X-RateLimit-Reset', expect.any(Number));
@@ -205,6 +211,47 @@ describe('ThrottlerGuard', () => {
       await expect(guard.canActivate(ctxMock)).rejects.toThrowError(ThrottlerException);
       expect(headerSettingMock).toBeCalledTimes(16);
       expect(headerSettingMock).toHaveBeenLastCalledWith('Retry-After', expect.any(Number));
+    });
+    it('should not return an error if requests are made from multiple ips', async () => {
+      handler = function returnError() {
+        return 'string';
+      };
+      const ctxMock = contextMockFactory('http', handler, {
+        getResponse: () => resMock,
+        getRequest: () => reqMock,
+      });
+      const ctxMock2 = contextMockFactory('http', handler, {
+        getResponse: () => resMock,
+        getRequest: () => reqMock2,
+      });
+      for (let i = 0; i < 3; i++) {
+        await guard.canActivate(ctxMock);
+        await guard.canActivate(ctxMock2);
+      }
+      await expect(guard.canActivate(ctxMock)).resolves.toBe(true);
+      await expect(guard.canActivate(ctxMock2)).resolves.toBe(true);
+    });
+    it('should not return an error for ip A if ip B hits a limit', async () => {
+      handler = function returnError() {
+        return 'string';
+      };
+      const ctxMock = contextMockFactory('http', handler, {
+        getResponse: () => resMock,
+        getRequest: () => reqMock,
+      });
+      const ctxMock2 = contextMockFactory('http', handler, {
+        getResponse: () => resMock,
+        getRequest: () => reqMock2,
+      });
+      for (let i = 0; i < 3; i++) {
+        await guard.canActivate(ctxMock);
+        await guard.canActivate(ctxMock2);
+      }
+      for (let i = 0; i < 2; i++) {
+        await guard.canActivate(ctxMock);
+      }
+      await expect(guard.canActivate(ctxMock)).rejects.toThrowError(ThrottlerException);
+      await expect(guard.canActivate(ctxMock2)).resolves.toBe(true);
     });
     it('should pull values from the reflector instead of options', async () => {
       handler = function useReflector() {

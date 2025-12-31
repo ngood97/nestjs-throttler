@@ -8,6 +8,7 @@ async function bootstrap() {
     new ExpressAdapter(),
     // new FastifyAdapter(),
   );
+  (app as any).set('trust proxy', true);
   await app.listen(3000);
 }
 bootstrap();

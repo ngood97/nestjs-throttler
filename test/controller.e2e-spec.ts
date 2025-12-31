@@ -28,12 +28,22 @@ describe.each`
         };
       }
     }
+    @Controller('test/multiple-ips')
+    class MultipleIpsTestController {
+      @Throttle({ default: { limit: 1, ttl: 100 } })
+      @Post()
+      async testThrottle() {
+        return {
+          code: 'THROTTLE_TEST',
+        };
+      }
+    }
     let app: INestApplication;
 
     beforeAll(async () => {
       const moduleFixture: TestingModule = await Test.createTestingModule({
         imports: [ControllerModule],
-        controllers: [ThrottleTestController],
+        controllers: [ThrottleTestController, MultipleIpsTestController],
         providers: [
           {
             provide: APP_GUARD,
@@ -182,6 +192,33 @@ describe.each`
           expect(res3.status).toBe(429);
           const res4 = await makeRequest();
           expect(res4.status).toBe(429);
+        });
+
+        it('GET /test/throttle should not be throttled calling from multiple ips', async () => {
+          const makeRequest = async (ip: string) =>
+            httPromise(appUrl + '/test/multiple-ips', 'POST', { 'X-Forwarded-For': ip }, {});
+
+          async function makeRequests(ip: string, numRequestsPerCycle: number) {
+            const responses = [];
+            for (let i = 0; i < 10; i++) {
+              for (let j = 0; j < numRequestsPerCycle; j++) {
+                responses.push(await makeRequest(ip));
+              }
+              await setTimeout(100);
+            }
+            return responses;
+          }
+          // make a request every 100ms from ip 127.0.0.1
+          // make 2 requests every 100ms from ip 127.0.0.2
+          // we assume that the controller is throttled to 1 request per 100ms
+          const responses1 = await makeRequests('127.0.0.1', 1);
+          const responses2 = await makeRequests('127.0.0.2', 2);
+
+          expect(responses1.length).toBe(10);
+          expect(responses1.every((response) => response.status === 201)).toBe(true);
+          expect(responses2.length).toBe(20);
+          expect(responses2.filter((response) => response.status === 429).length).toBe(10);
+          expect(responses2.filter((response) => response.status === 201).length).toBe(10);
         });
       });
     });

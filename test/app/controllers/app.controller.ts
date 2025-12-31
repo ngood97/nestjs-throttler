@@ -3,7 +3,7 @@ import { SkipThrottle, Throttle, seconds } from '../../../src';
 import { AppService } from '../app.service';
 
 @Controller()
-@Throttle({ default: { limit: 2, ttl: seconds(10) } })
+@Throttle({ default: { limit: 3, ttl: seconds(1) } })
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
